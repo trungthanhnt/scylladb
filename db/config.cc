@@ -20,6 +20,7 @@
 
 #include <seastar/core/coroutine.hh>
 #include <seastar/core/format.hh>
+#include <seastar/core/sstring.hh>
 #include <seastar/json/json_elements.hh>
 #include <seastar/util/log.hh>
 #include <seastar/util/log-cli.hh>
@@ -113,6 +114,12 @@ config_from_string(std::string_view value) {
     } else {
         throw boost::bad_lexical_cast(typeid(std::string_view), typeid(bool));
     }
+}
+
+template <>
+sstring
+config_from_string(std::string_view value) {
+    return sstring(value);
 }
 
 template <>
@@ -760,6 +767,7 @@ db::config::config(std::shared_ptr<db::extensions> exts)
         "Throttles streaming I/O to the specified total throughput (in MiBs/s) across the entire system. Streaming I/O includes the one performed by repair and both RBNO and legacy topology operations such as adding or removing a node. Setting the value to 0 disables stream throttling.")
     , stream_plan_ranges_fraction(this, "stream_plan_ranges_fraction", liveness::LiveUpdate, value_status::Used, 0.1,
         "Specify the fraction of ranges to stream in a single stream plan. Value is between 0 and 1.")
+    , enable_file_stream(this, "enable_file_stream", liveness::LiveUpdate, value_status::Used, true, "Set true to use file based stream for tablet instead of mutation based stream")
     , trickle_fsync(this, "trickle_fsync", value_status::Unused, false,
         "When doing sequential writing, enabling this option tells fsync to force the operating system to flush the dirty buffers at a set interval trickle_fsync_interval_in_kb. Enable this parameter to avoid sudden dirty buffer flushing from impacting read latencies. Recommended to use on SSDs, but not on HDDs.")
     , trickle_fsync_interval_in_kb(this, "trickle_fsync_interval_in_kb", value_status::Unused, 10240,
@@ -1340,11 +1348,11 @@ db::config::config(std::shared_ptr<db::extensions> exts)
         "\tnone   : No auditing enabled.\n"
         "\tsyslog : Audit messages sent to Syslog.\n"
         "\ttable  : Audit messages written to column family named audit.audit_log.\n")
-    , audit_categories(this, "audit_categories", value_status::Used, "DCL,DDL,AUTH", "Comma separated list of operation categories that should be audited.")
-    , audit_tables(this, "audit_tables", value_status::Used, "", "Comma separated list of table names (<keyspace>.<table>) that will be audited.")
-    , audit_keyspaces(this, "audit_keyspaces", value_status::Used, "", "Comma separated list of keyspaces that will be audited. All tables in those keyspaces will be audited")
-    , audit_unix_socket_path(this, "audit_unix_socket_path", value_status::Used, "/dev/log", "The path to the unix socket used for writting to syslog. Only applicable when audit is set to syslog.")
-    , audit_syslog_write_buffer_size(this, "audit_syslog_write_buffer_size", value_status::Used, 1048576, "The size (in bytes) of a write buffer used when writting to syslog socket.")
+    , audit_categories(this, "audit_categories", liveness::LiveUpdate, value_status::Used, "DCL,DDL,AUTH", "Comma separated list of operation categories that should be audited.")
+    , audit_tables(this, "audit_tables", liveness::LiveUpdate, value_status::Used, "", "Comma separated list of table names (<keyspace>.<table>) that will be audited.")
+    , audit_keyspaces(this, "audit_keyspaces", liveness::LiveUpdate, value_status::Used, "", "Comma separated list of keyspaces that will be audited. All tables in those keyspaces will be audited")
+    , audit_unix_socket_path(this, "audit_unix_socket_path", value_status::Used, "/dev/log", "The path to the unix socket used for writing to syslog. Only applicable when audit is set to syslog.")
+    , audit_syslog_write_buffer_size(this, "audit_syslog_write_buffer_size", value_status::Used, 1048576, "The size (in bytes) of a write buffer used when writing to syslog socket.")
     , ldap_url_template(this, "ldap_url_template", value_status::Used, "", "LDAP URL template used by LDAPRoleManager for crafting queries.")
     , ldap_attr_role(this, "ldap_attr_role", value_status::Used, "", "LDAP attribute containing Scylla role.")
     , ldap_bind_dn(this, "ldap_bind_dn", value_status::Used, "", "Distinguished name used by LDAPRoleManager for binding to LDAP server.")

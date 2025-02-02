@@ -387,7 +387,7 @@ public:
     future<> check_for_endpoint_collision(std::unordered_set<gms::inet_address> initial_contact_nodes,
             const std::unordered_map<gms::inet_address, sstring>& loaded_peer_features);
 
-    future<> join_cluster(sharded<db::system_distributed_keyspace>& sys_dist_ks, sharded<service::storage_proxy>& proxy,
+    future<> join_cluster(sharded<service::storage_proxy>& proxy,
             start_hint_manager start_hm, gms::generation_type new_generation);
 
     void set_group0(service::raft_group0&);
@@ -407,8 +407,7 @@ private:
     bool should_bootstrap();
     bool is_replacing();
     bool is_first_node();
-    future<> join_topology(sharded<db::system_distributed_keyspace>& sys_dist_ks,
-            sharded<service::storage_proxy>& proxy,
+    future<> join_topology(sharded<service::storage_proxy>& proxy,
             std::unordered_set<gms::inet_address> initial_contact_nodes,
             std::unordered_map<locator::host_id, gms::loaded_endpoint_state> loaded_endpoints,
             std::unordered_map<gms::inet_address, sstring> loaded_peer_features,
@@ -837,7 +836,7 @@ private:
     future<> _raft_state_monitor = make_ready_future<>();
     // This fibers monitors raft state and start/stops the topology change
     // coordinator fiber
-    future<> raft_state_monitor_fiber(raft::server&, gate::holder, sharded<db::system_distributed_keyspace>& sys_dist_ks);
+    future<> raft_state_monitor_fiber(raft::server&, gate::holder);
 
 public:
     bool topology_global_queue_empty() const {
@@ -927,7 +926,7 @@ public:
 private:
     // Tracks progress of the upgrade to topology coordinator.
     future<> _upgrade_to_topology_coordinator_fiber = make_ready_future<>();
-    future<> track_upgrade_progress_to_topology_coordinator(sharded<db::system_distributed_keyspace>& sys_dist_ks, sharded<service::storage_proxy>& proxy);
+    future<> track_upgrade_progress_to_topology_coordinator(sharded<service::storage_proxy>& proxy);
 
     future<> transit_tablet(table_id, dht::token, noncopyable_function<std::tuple<std::vector<canonical_mutation>, sstring>(const locator::tablet_map& tmap, api::timestamp_type)> prepare_mutations);
     future<service::group0_guard> get_guard_for_tablet_update();
@@ -964,11 +963,12 @@ private:
         std::vector<gms::inet_address> joined;
     };
 
+    future<> raft_topology_update_ip(locator::host_id id, gms::inet_address ip, nodes_to_notify_after_sync* nodes_to_notify);
     // Synchronizes the local node state (token_metadata, system.peers/system.local tables,
     // gossiper) to align it with the other raft topology nodes.
     // Optional target_node can be provided to restrict the synchronization to the specified node.
     // Returns a structure that describes which notifications to trigger after token metadata is updated.
-    future<nodes_to_notify_after_sync> sync_raft_topology_nodes(mutable_token_metadata_ptr tmptr, std::optional<locator::host_id> target_node, std::unordered_set<raft::server_id> prev_normal);
+    future<nodes_to_notify_after_sync> sync_raft_topology_nodes(mutable_token_metadata_ptr tmptr, std::unordered_set<raft::server_id> prev_normal);
     // Triggers notifications (on_joined, on_left) based on the recent changes to token metadata, as described by the passed in structure.
     // This function should be called on the result of `sync_raft_topology_nodes`, after the global token metadata is updated.
     future<> notify_nodes_after_sync(nodes_to_notify_after_sync&& nodes_to_notify);

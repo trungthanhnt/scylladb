@@ -11,6 +11,9 @@
 
 #include <boost/any.hpp>
 #include <boost/regex.hpp>
+#include <boost/program_options/errors.hpp>
+#include <boost/program_options/value_semantic.hpp>
+#include <boost/lexical_cast.hpp>
 #include <yaml-cpp/node/convert.h>
 
 #include <seastar/core/smp.hh>
@@ -26,6 +29,9 @@ T config_from_string(std::string_view string_representation) {
 
 template <>
 bool config_from_string(std::string_view string_representation);
+
+template <>
+sstring config_from_string(std::string_view string_representation);
 
 }
 

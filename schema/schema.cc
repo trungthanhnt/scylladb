@@ -36,6 +36,8 @@
 #include "utils/hashing.hh"
 #include "utils/hashers.hh"
 
+#include <boost/lexical_cast.hpp>
+
 constexpr int32_t schema::NAME_LENGTH;
 
 extern logging::logger dblog;
@@ -82,6 +84,10 @@ speculative_retry::from_sstring(sstring str) {
     } else if (str.compare(str.size() - percentile.size(), percentile.size(), percentile) == 0) {
         t = type::PERCENTILE;
         v = convert(percentile) / 100;
+        if  (v <= 0.0 || v >= 1.0) {
+            throw exceptions::configuration_exception(
+                format("Invalid value {} for PERCENTILE option 'speculative_retry': must be between (0.0 and 100.0)", str));
+        }
     } else {
         throw std::invalid_argument(format("cannot convert {} to speculative_retry\n", str));
     }

@@ -677,6 +677,9 @@ database::setup_metrics() {
 
         sm::make_total_operations("total_view_updates_on_wrong_node", _cf_stats.total_view_updates_on_wrong_node,
                 sm::description("Total number of view updates which are computed on the wrong node.")).set_skip_when_empty(),
+
+        sm::make_total_operations("total_view_updates_failed_pairing", _cf_stats.total_view_updates_failed_pairing,
+                sm::description("Total number of view updates for which we failed base/view pairing.")).set_skip_when_empty(),
     });
     if (this_shard_id() == 0) {
         _metrics.add_group("database", {
@@ -964,7 +967,6 @@ future<> database::add_column_family(keyspace& ks, schema_ptr schema, column_fam
         }
     }
     schema = local_schema_registry().learn(schema);
-    schema->registry_entry()->mark_synced();
     auto&& rs = ks.get_replication_strategy();
     locator::effective_replication_map_ptr erm;
     if (auto pt_rs = rs.maybe_as_per_table()) {
@@ -996,6 +998,8 @@ future<> database::add_column_family(keyspace& ks, schema_ptr schema, column_fam
         co_await cf->stop();
         co_await coroutine::return_exception_ptr(f.get_exception());
     }
+    // Table must be added before entry is marked synced.
+    schema->registry_entry()->mark_synced();
 }
 
 future<> database::add_column_family_and_make_directory(schema_ptr schema, is_new_cf is_new) {
@@ -2556,6 +2560,12 @@ future<> database::truncate_table_on_all_shards(sharded<database>& sharded_db, s
             co_return make_foreign(std::move(st));
         });
     });
+
+    co_await utils::get_local_injector().inject("truncate_compaction_disabled_wait", [] (auto& handler) -> future<> {
+        dblog.info("truncate_compaction_disabled_wait: wait");
+        co_await handler.wait_for_message(std::chrono::steady_clock::now() + std::chrono::minutes{5});
+        dblog.info("truncate_compaction_disabled_wait: done");
+    }, false);
 
     const auto should_flush = with_snapshot && cf.can_flush();
     dblog.trace("{} {}.{} and views on all shards", should_flush ? "Flushing" : "Clearing", s->ks_name(), s->cf_name());
